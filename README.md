@@ -1,8 +1,10 @@
 # Yushan Gamification Service
 
-> 🎮 **Gamification Service for Yushan Webnovel Platform.** - Manages achievements, rewards, leaderboards, and progression systems to create an engaging, game-like reading experience.
+> 🎮 **Gamification Service for Yushan Platform (Phase 2 - Microservices)** - Manages achievements, rewards, leaderboards, and progression systems to create an engaging, game-like reading experience.
 
-# Yushan Platform - Gamification Service Setup Guide
+## 📋 Overview
+
+Gamification Service is one of the main microservices of Yushan Platform (Phase 2), responsible for managing all gamification features. This service listens to events from User Service and Engagement Service via Kafka to automatically award XP and Yuan to users.
 
 ## Architecture Overview
 
@@ -54,8 +56,8 @@ Before setting up the Gamification Service, ensure you have:
 
 ```bash
 # Clone the service registry repository
-git clone https://github.com/maugus0/yushan-platform-service-registry
-cd yushan-platform-service-registry
+git clone https://github.com/phutruonnttn/yushan-microservices-service-registry
+cd yushan-microservices-service-registry
 
 # Option 1: Run with Docker (Recommended)
 docker-compose up -d
@@ -74,8 +76,8 @@ docker-compose up -d
 ## Step 2: Clone the Gamification Service Repository
 
 ```bash
-git clone https://github.com/maugus0/yushan-gamification-service.git
-cd yushan-gamification-service
+git clone https://github.com/phutruonnttn/yushan-microservices-gamification-service.git
+cd yushan-microservices-gamification-service
 
 # Option 1: Run with Docker (Recommended)
 docker-compose up -d
@@ -113,106 +115,60 @@ Instances currently registered with Eureka:
 ### Health Check
 - **GET** `/api/v1/health` - Service health status
 
+### Gamification Stats
+- **GET** `/api/v1/gamification/stats/me` - Get current user's gamification stats (level, EXP, Yuan)
+- **GET** `/api/v1/gamification/stats/userId/{userId}` - Get other user's gamification stats
+- **GET** `/api/v1/gamification/stats/all` - Get all users' gamification stats (for ranking)
+- **POST** `/api/v1/gamification/stats/batch` - Get batch users' gamification stats
+
+### User Level
+- **GET** `/api/v1/gamification/users/{userId}/level` - Get user's level, EXP, and progress
+
 ### Achievements
-- **GET** `/api/v1/achievements` - List all available achievements
-- **GET** `/api/v1/achievements/{achievementId}` - Get achievement details
-- **POST** `/api/v1/achievements` - Create new achievement (admin)
-- **GET** `/api/v1/achievements/users/{userId}` - Get user's achievements
-- **POST** `/api/v1/achievements/users/{userId}/unlock` - Unlock achievement for user
+- **GET** `/api/v1/gamification/achievements/me` - Get current user's unlocked achievements
+- **GET** `/api/v1/gamification/achievements/userId/{userId}` - Get other user's unlocked achievements
 
-### Badges
-- **GET** `/api/v1/badges` - List all available badges
-- **GET** `/api/v1/badges/{badgeId}` - Get badge details
-- **GET** `/api/v1/badges/users/{userId}` - Get user's badges
-- **POST** `/api/v1/badges/users/{userId}/award` - Award badge to user
-
-### Points & Levels
-- **GET** `/api/v1/points/users/{userId}` - Get user's points
-- **POST** `/api/v1/points/users/{userId}/add` - Add points to user
-- **GET** `/api/v1/levels/users/{userId}` - Get user's level
-- **GET** `/api/v1/levels/config` - Get level configuration
-
-### Leaderboards
-- **GET** `/api/v1/leaderboards/global` - Get global leaderboard
-- **GET** `/api/v1/leaderboards/weekly` - Get weekly leaderboard
-- **GET** `/api/v1/leaderboards/monthly` - Get monthly leaderboard
-- **GET** `/api/v1/leaderboards/users/{userId}/rank` - Get user's rank
-- **GET** `/api/v1/leaderboards/genre/{genreId}` - Get genre-specific leaderboard
+### Yuan (Virtual Currency)
+- **GET** `/api/v1/gamification/yuan/transactions/me` - Get current user's Yuan transaction history (with pagination)
 
 ### Rewards
-- **GET** `/api/v1/rewards` - List available rewards
-- **GET** `/api/v1/rewards/users/{userId}` - Get user's rewards
-- **POST** `/api/v1/rewards/users/{userId}/claim` - Claim reward
-- **GET** `/api/v1/rewards/users/{userId}/history` - Get reward history
+- **POST** `/api/v1/gamification/comments/{commentId}/reward` - Award EXP for creating a comment
+- **POST** `/api/v1/gamification/reviews/{reviewId}/reward` - Award EXP for creating a review
+- **POST** `/api/v1/gamification/votes/reward` - Award 3 EXP for voting
+- **GET** `/api/v1/gamification/votes/check` - Check if user has enough Yuan to vote
+- **POST** `/api/v1/gamification/votes/deduct-yuan` - Deduct 1 Yuan for voting
 
-### Streaks
-- **GET** `/api/v1/streaks/users/{userId}` - Get user's streak info
-- **POST** `/api/v1/streaks/users/{userId}/check-in` - Daily check-in
-- **GET** `/api/v1/streaks/users/{userId}/history` - Get streak history
-
-### Quests/Challenges
-- **GET** `/api/v1/quests` - List active quests
-- **GET** `/api/v1/quests/{questId}` - Get quest details
-- **GET** `/api/v1/quests/users/{userId}` - Get user's active quests
-- **POST** `/api/v1/quests/users/{userId}/start` - Start a quest
-- **POST** `/api/v1/quests/users/{userId}/complete` - Complete a quest
+### Admin Endpoints
+- **GET** `/api/v1/gamification/admin/yuan/transactions` - Get all Yuan transactions (with filters, ADMIN)
+- **POST** `/api/v1/gamification/admin/yuan/add` - Add Yuan to user (ADMIN)
 
 ---
 
 ## Key Features
 
+### 📊 Experience Points (EXP) & Levels
+- Experience points (EXP) system
+- Level progression based on EXP
+- EXP rewards for:
+  - Creating comments
+  - Creating reviews
+  - Voting for novels (3 EXP per vote)
+
+### 💰 Yuan (Virtual Currency)
+- Yuan balance tracking
+- Yuan deduction for voting (1 Yuan per vote)
+- Yuan transaction history
+- Admin can add Yuan to users
+
 ### 🏆 Achievement System
-- Milestone-based achievements
-- Hidden achievements
-- Progressive achievements (Bronze, Silver, Gold)
-- Category-based achievements (Reading, Social, Engagement)
-- Achievement tracking and notifications
-
-### 🎖️ Badge Collection
-- Collectible badges
-- Limited edition badges
-- Event-specific badges
-- Badge display on profiles
-- Badge rarity levels
-
-### 📊 Points & Levels
-- Experience points (XP) system
-- Level progression
-- Points for various activities:
-  - Reading chapters
-  - Writing reviews
-  - Daily login
-  - Social interactions
-  - Completing challenges
-
-### 🥇 Leaderboards
-- Global rankings
-- Time-based leaderboards (daily/weekly/monthly)
-- Genre-specific rankings
-- Friend leaderboards
-- Real-time rank updates
-- Cached for performance
+- Achievement unlocking system
+- User achievement tracking
+- Achievement display on profiles
 
 ### 🎁 Reward System
-- Redeemable rewards
-- Milestone rewards
-- Daily/Weekly bonuses
-- Special event rewards
-- Reward marketplace
-
-### 🔥 Streak System
-- Daily reading streaks
-- Streak bonuses
-- Streak freeze mechanics
-- Longest streak tracking
-- Streak milestones
-
-### 🎯 Quest System
-- Daily quests
-- Weekly challenges
-- Special event quests
-- Progressive quest chains
-- Quest rewards and XP
+- Automatic EXP rewards for user activities
+- Vote eligibility checking (requires Yuan)
+- Integration with Engagement Service (comments, reviews, votes)
 
 ---
 
@@ -220,17 +176,10 @@ Instances currently registered with Eureka:
 
 The Gamification Service uses the following key entities:
 
+- **UserPoints** - User EXP, level, and Yuan balance
 - **Achievement** - Achievement definitions
 - **UserAchievement** - User-achievement mappings
-- **Badge** - Badge definitions
-- **UserBadge** - User-badge mappings
-- **UserPoints** - User points and level data
-- **LeaderboardEntry** - Leaderboard rankings
-- **Reward** - Reward catalog
-- **UserReward** - User-reward history
-- **Streak** - User streak data
-- **Quest** - Quest definitions
-- **UserQuest** - User quest progress
+- **YuanTransaction** - Yuan transaction history
 
 ---
 
@@ -346,5 +295,14 @@ The Gamification Service exposes metrics through:
 
 ---
 
-## License
+## 📄 License
+
 This project is part of the Yushan Platform ecosystem.
+
+## 🔗 Links
+
+- **API Gateway**: [yushan-microservices-api-gateway](https://github.com/phutruonnttn/yushan-microservices-api-gateway)
+- **Service Registry**: [yushan-microservices-service-registry](https://github.com/phutruonnttn/yushan-microservices-service-registry)
+- **Config Server**: [yushan-microservices-config-server](https://github.com/phutruonnttn/yushan-microservices-config-server)
+- **Platform Documentation**: [yushan-platform-docs](https://github.com/phutruonnttn/yushan-platform-docs) - Complete documentation for all phases
+- **Phase 2 Architecture**: See [Phase 2 Microservices Architecture](https://github.com/phutruonnttn/yushan-platform-docs/blob/main/docs/phase2-microservices/PHASE2_MICROSERVICES_ARCHITECTURE.md)
