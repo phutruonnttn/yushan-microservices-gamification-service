@@ -101,7 +101,7 @@ jobs:
       
     - name: Upload SpotBugs SARIF to GitHub
       if: always() && hashFiles('spotbugs.sarif') != ''
-      uses: github/codeql-action/upload-sarif@v3
+      uses: github/codeql-action/upload-sarif@v4
       with:
         sarif_file: spotbugs.sarif
         
@@ -168,7 +168,7 @@ jobs:
       
     - name: Upload Dependency-Check SARIF
       if: always() && hashFiles('target/dependency-check-report.sarif') != ''
-      uses: github/codeql-action/upload-sarif@v3
+      uses: github/codeql-action/upload-sarif@v4
       with:
         sarif_file: target/dependency-check-report.sarif
       
@@ -201,7 +201,7 @@ jobs:
       
     - name: Upload Snyk result to GitHub Code Scanning
       if: always() && hashFiles('snyk.sarif') != ''
-      uses: github/codeql-action/upload-sarif@v3
+      uses: github/codeql-action/upload-sarif@v4
       with:
         sarif_file: snyk.sarif
 
@@ -272,7 +272,7 @@ jobs:
         output: 'trivy-results.sarif'
         
     - name: Upload Trivy scan results to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@v3
+      uses: github/codeql-action/upload-sarif@v4
       if: always() && hashFiles('trivy-results.sarif') != ''
       with:
         sarif_file: 'trivy-results.sarif'
