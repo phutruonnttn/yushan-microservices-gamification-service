@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yushan.gamification_service.service.GamificationService;
-import org.junit.jupiter.api.BeforeEach;
+import com.yushan.gamification_service.service.IdempotencyService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -14,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -28,20 +29,14 @@ class EngagementEventListenerTest {
     @Mock
     private JsonNode jsonNode;
 
+    @Mock
+    private IdempotencyService idempotencyService;
+
     @InjectMocks
     private EngagementEventListener engagementEventListener;
 
     private final UUID testUserId = UUID.randomUUID();
     private final String testUserIdStr = testUserId.toString();
-
-    @BeforeEach
-    void setUp() throws JsonProcessingException {
-        // Common setup to mock objectMapper and JsonNode behavior
-        when(objectMapper.readTree(any(String.class))).thenReturn(jsonNode);
-        JsonNode userIdNode = mock(JsonNode.class);
-        when(jsonNode.get("userId")).thenReturn(userIdNode);
-        when(userIdNode.asText()).thenReturn(testUserIdStr);
-    }
 
     @Test
     void handleCommentCreatedEvent_shouldProcessComment() throws Exception {
@@ -50,9 +45,14 @@ class EngagementEventListenerTest {
         String eventJson = String.format("{\"commentId\":%d,\"userId\":\"%s\"}", commentId, testUserIdStr);
 
         JsonNode commentIdNode = mock(JsonNode.class);
+        JsonNode userIdNode = mock(JsonNode.class);
+        when(objectMapper.readTree(eventJson)).thenReturn(jsonNode);
         when(jsonNode.get("commentId")).thenReturn(commentIdNode);
         when(commentIdNode.asInt()).thenReturn((int) commentId);
-
+        when(jsonNode.get("userId")).thenReturn(userIdNode);
+        when(userIdNode.asText()).thenReturn(testUserIdStr);
+        when(idempotencyService.isProcessed(anyString(), eq("CommentReward"))).thenReturn(false); // Not processed yet
+        doNothing().when(idempotencyService).markAsProcessed(anyString(), eq("CommentReward"));
         doNothing().when(gamificationService).processUserComment(testUserId, commentId);
 
         // When
@@ -60,7 +60,9 @@ class EngagementEventListenerTest {
 
         // Then
         verify(objectMapper).readTree(eventJson);
+        verify(idempotencyService).isProcessed(anyString(), eq("CommentReward"));
         verify(gamificationService).processUserComment(testUserId, commentId);
+        verify(idempotencyService).markAsProcessed(anyString(), eq("CommentReward"));
     }
 
     @Test
@@ -70,9 +72,14 @@ class EngagementEventListenerTest {
         String eventJson = String.format("{\"reviewId\":%d,\"userId\":\"%s\"}", reviewId, testUserIdStr);
 
         JsonNode reviewIdNode = mock(JsonNode.class);
+        JsonNode userIdNode = mock(JsonNode.class);
+        when(objectMapper.readTree(eventJson)).thenReturn(jsonNode);
         when(jsonNode.get("reviewId")).thenReturn(reviewIdNode);
         when(reviewIdNode.asInt()).thenReturn((int) reviewId);
-
+        when(jsonNode.get("userId")).thenReturn(userIdNode);
+        when(userIdNode.asText()).thenReturn(testUserIdStr);
+        when(idempotencyService.isProcessed(anyString(), eq("ReviewReward"))).thenReturn(false); // Not processed yet
+        doNothing().when(idempotencyService).markAsProcessed(anyString(), eq("ReviewReward"));
         doNothing().when(gamificationService).processUserReview(testUserId, reviewId);
 
         // When
@@ -80,13 +87,27 @@ class EngagementEventListenerTest {
 
         // Then
         verify(objectMapper).readTree(eventJson);
+        verify(idempotencyService).isProcessed(anyString(), eq("ReviewReward"));
         verify(gamificationService).processUserReview(testUserId, reviewId);
+        verify(idempotencyService).markAsProcessed(anyString(), eq("ReviewReward"));
     }
 
     @Test
     void handleVoteCreatedEvent_shouldProcessVote() throws Exception {
         // Given
-        String eventJson = String.format("{\"userId\":\"%s\"}", testUserIdStr);
+        Integer voteId = 789;
+        String eventJson = String.format("{\"voteId\":%d,\"userId\":\"%s\"}", voteId, testUserIdStr);
+        
+        JsonNode voteIdNode = mock(JsonNode.class);
+        JsonNode userIdNode = mock(JsonNode.class);
+        when(objectMapper.readTree(eventJson)).thenReturn(jsonNode);
+        when(jsonNode.has("voteId")).thenReturn(true);
+        when(jsonNode.get("voteId")).thenReturn(voteIdNode);
+        when(voteIdNode.asInt()).thenReturn(voteId);
+        when(jsonNode.get("userId")).thenReturn(userIdNode);
+        when(userIdNode.asText()).thenReturn(testUserIdStr);
+        when(idempotencyService.isProcessed(anyString(), eq("VoteReward"))).thenReturn(false); // Not processed yet
+        doNothing().when(idempotencyService).markAsProcessed(anyString(), eq("VoteReward"));
         doNothing().when(gamificationService).processUserVote(testUserId);
 
         // When
@@ -94,19 +115,29 @@ class EngagementEventListenerTest {
 
         // Then
         verify(objectMapper).readTree(eventJson);
+        verify(idempotencyService).isProcessed(anyString(), eq("VoteReward"));
         verify(gamificationService).processUserVote(testUserId);
+        verify(idempotencyService).markAsProcessed(anyString(), eq("VoteReward"));
     }
 
     @Test
     void handleEvent_shouldCatchJsonProcessingException() throws Exception {
         // Given
         String invalidJson = "invalid-json";
+        when(objectMapper.readTree(invalidJson))
+                .thenThrow(new JsonProcessingException("Test Exception") {});
 
-        // When
-        engagementEventListener.handleCommentCreatedEvent(invalidJson);
+        // When & Then
+        try {
+            engagementEventListener.handleCommentCreatedEvent(invalidJson);
+        } catch (RuntimeException e) {
+            // Expected: RuntimeException is thrown to trigger Kafka retry
+        }
 
         // Then
         // Verify that the service method was not called due to the exception
         verify(gamificationService, never()).processUserComment(any(), anyLong());
+        verify(idempotencyService, never()).isProcessed(anyString(), anyString());
+        verify(idempotencyService, never()).markAsProcessed(anyString(), anyString());
     }
 }

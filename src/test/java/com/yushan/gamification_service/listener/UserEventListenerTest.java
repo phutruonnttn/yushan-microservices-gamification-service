@@ -7,6 +7,7 @@ import com.yushan.gamification_service.dto.event.EventEnvelope;
 import com.yushan.gamification_service.dto.event.UserLoggedInEvent;
 import com.yushan.gamification_service.dto.event.UserRegisteredEvent;
 import com.yushan.gamification_service.service.GamificationService;
+import com.yushan.gamification_service.service.IdempotencyService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -32,6 +33,9 @@ class UserEventListenerTest {
     @Mock
     private JsonNode jsonNode;
 
+    @Mock
+    private IdempotencyService idempotencyService;
+
     @InjectMocks
     private UserEventListener userEventListener;
 
@@ -47,13 +51,17 @@ class UserEventListenerTest {
 
         when(objectMapper.readValue(message, EventEnvelope.class)).thenReturn(envelope);
         when(objectMapper.treeToValue(jsonNode, UserRegisteredEvent.class)).thenReturn(registeredEvent);
+        when(idempotencyService.isProcessed(anyString(), eq("UserRegistration"))).thenReturn(false); // Not processed yet
+        doNothing().when(idempotencyService).markAsProcessed(anyString(), eq("UserRegistration"));
         doNothing().when(gamificationService).processUserRegistration(userId);
 
         // When
         userEventListener.handleUserEvent(message);
 
         // Then
+        verify(idempotencyService).isProcessed(anyString(), eq("UserRegistration"));
         verify(gamificationService).processUserRegistration(userId);
+        verify(idempotencyService).markAsProcessed(anyString(), eq("UserRegistration"));
         verify(gamificationService, never()).processUserLogin(any());
     }
 
@@ -69,13 +77,17 @@ class UserEventListenerTest {
 
         when(objectMapper.readValue(message, EventEnvelope.class)).thenReturn(envelope);
         when(objectMapper.treeToValue(jsonNode, UserLoggedInEvent.class)).thenReturn(loggedInEvent);
+        when(idempotencyService.isProcessed(anyString(), eq("UserLogin"))).thenReturn(false); // Not processed yet
+        doNothing().when(idempotencyService).markAsProcessed(anyString(), eq("UserLogin"));
         doNothing().when(gamificationService).processUserLogin(userId);
 
         // When
         userEventListener.handleUserEvent(message);
 
         // Then
+        verify(idempotencyService).isProcessed(anyString(), eq("UserLogin"));
         verify(gamificationService).processUserLogin(userId);
+        verify(idempotencyService).markAsProcessed(anyString(), eq("UserLogin"));
         verify(gamificationService, never()).processUserRegistration(any());
     }
 
@@ -102,8 +114,12 @@ class UserEventListenerTest {
         when(objectMapper.readValue(invalidJson, EventEnvelope.class))
                 .thenThrow(new JsonProcessingException("Test Exception") {});
 
-        // When
-        userEventListener.handleUserEvent(invalidJson);
+        // When & Then
+        try {
+            userEventListener.handleUserEvent(invalidJson);
+        } catch (RuntimeException e) {
+            // Expected: RuntimeException is thrown to trigger Kafka retry
+        }
 
         // Then
         verify(gamificationService, never()).processUserRegistration(any());
