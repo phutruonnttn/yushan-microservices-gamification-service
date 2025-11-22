@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yushan.gamification_service.dao.ProcessedEventMapper">
+
+    <resultMap id="BaseResultMap" type="com.yushan.gamification_service.entity.ProcessedEvent">
+        <id column="idempotency_key" jdbcType="VARCHAR" property="idempotencyKey"/>
+        <result column="event_type" jdbcType="VARCHAR" property="eventType"/>
+        <result column="service_name" jdbcType="VARCHAR" property="serviceName"/>
+        <result column="processed_at" jdbcType="TIMESTAMP" property="processedAt"/>
+        <result column="event_data" jdbcType="VARCHAR" property="eventData"/>
+    </resultMap>
+
+    <select id="existsByIdempotencyKey" resultType="boolean">
+        SELECT EXISTS(
+            SELECT 1
+            FROM processed_events
+            WHERE idempotency_key = #{idempotencyKey,jdbcType=VARCHAR}
+        )
+    </select>
+
+    <insert id="insert" parameterType="com.yushan.gamification_service.entity.ProcessedEvent">
+        INSERT INTO processed_events (
+            idempotency_key,
+            event_type,
+            service_name,
+            processed_at,
+            event_data
+        ) VALUES (
+            #{idempotencyKey,jdbcType=VARCHAR},
+            #{eventType,jdbcType=VARCHAR},
+            #{serviceName,jdbcType=VARCHAR},
+            #{processedAt,jdbcType=TIMESTAMP},
+            #{eventData,jdbcType=VARCHAR}
+        )
+        ON CONFLICT (idempotency_key) DO NOTHING
+    </insert>
+
+    <delete id="deleteOldProcessedEvents">
+        DELETE FROM processed_events
+        WHERE processed_at &lt; #{beforeDate,jdbcType=TIMESTAMP}
+    </delete>
+
+</mapper>
+
