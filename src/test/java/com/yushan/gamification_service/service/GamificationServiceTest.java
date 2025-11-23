@@ -1,6 +1,6 @@
 package com.yushan.gamification_service.service;
 
-import com.yushan.gamification_service.dao.*;
+import com.yushan.gamification_service.repository.UserProgressRepository;
 import com.yushan.gamification_service.dto.achievement.AchievementDTO;
 import com.yushan.gamification_service.dto.common.PageResponseDTO;
 import com.yushan.gamification_service.dto.event.LevelUpEvent;
@@ -32,22 +32,13 @@ import static org.mockito.Mockito.*;
 public class GamificationServiceTest {
 
     @Mock
-    private DailyRewardLogMapper dailyRewardLogMapper;
-
-    @Mock
-    private ExpTransactionMapper expTransactionMapper;
-
-    @Mock
-    private YuanTransactionMapper yuanTransactionMapper;
+    private UserProgressRepository userProgressRepository;
 
     @Mock
     private LevelService levelService;
 
     @Mock
     private AchievementService achievementService;
-
-    @Mock
-    private UserAchievementMapper userAchievementMapper;
 
     @Mock
     private KafkaTemplate<String, Object> kafkaTemplate;
@@ -65,6 +56,8 @@ public class GamificationServiceTest {
         ReflectionTestUtils.setField(gamificationService, "reviewExp", 5.0);
         ReflectionTestUtils.setField(gamificationService, "voteExp", 3.0);
         ReflectionTestUtils.setField(gamificationService, "registrationYuan", 2.0);
+        // Inject UserProgressRepository into GamificationService
+        ReflectionTestUtils.setField(gamificationService, "userProgressRepository", userProgressRepository);
     }
 
     @Test
@@ -74,7 +67,7 @@ public class GamificationServiceTest {
 
         // Then
         ArgumentCaptor<YuanTransaction> captor = ArgumentCaptor.forClass(YuanTransaction.class);
-        verify(yuanTransactionMapper).insert(captor.capture());
+        verify(userProgressRepository).saveYuanTransaction(captor.capture());
         assertEquals(testUserId, captor.getValue().getUserId());
         assertEquals(2.0, captor.getValue().getAmount());
         assertEquals("Registration Reward", captor.getValue().getDescription());
@@ -83,19 +76,19 @@ public class GamificationServiceTest {
     @Test
     void processUserLogin_FirstLoginOfDay_Success() {
         // Given
-        when(dailyRewardLogMapper.findByUserId(testUserId)).thenReturn(Optional.empty());
-        when(expTransactionMapper.sumAmountByUserId(testUserId)).thenReturn(0.0);
+        when(userProgressRepository.findDailyRewardLogByUserId(testUserId)).thenReturn(Optional.empty());
+        when(userProgressRepository.sumExpAmountByUserId(testUserId)).thenReturn(0.0);
         when(levelService.calculateLevel(anyDouble())).thenReturn(1);
 
         // When
         gamificationService.processUserLogin(testUserId);
 
         // Then
-        verify(expTransactionMapper).insert(any(ExpTransaction.class));
-        verify(yuanTransactionMapper).insert(any(YuanTransaction.class));
+        verify(userProgressRepository).saveExpTransaction(any(ExpTransaction.class));
+        verify(userProgressRepository).saveYuanTransaction(any(YuanTransaction.class));
         verify(achievementService).checkAndUnlockLoginAchievements(testUserId);
-        verify(dailyRewardLogMapper).insert(any(DailyRewardLog.class));
-        verify(dailyRewardLogMapper, never()).update(any());
+        verify(userProgressRepository).saveDailyRewardLog(any(DailyRewardLog.class));
+        verify(userProgressRepository, never()).updateDailyRewardLog(any());
     }
 
     @Test
@@ -104,18 +97,18 @@ public class GamificationServiceTest {
         DailyRewardLog oldLog = new DailyRewardLog();
         oldLog.setUserId(testUserId);
         oldLog.setLastRewardDate(LocalDate.now().minusDays(1));
-        when(dailyRewardLogMapper.findByUserId(testUserId)).thenReturn(Optional.of(oldLog));
-        when(expTransactionMapper.sumAmountByUserId(testUserId)).thenReturn(10.0);
+        when(userProgressRepository.findDailyRewardLogByUserId(testUserId)).thenReturn(Optional.of(oldLog));
+        when(userProgressRepository.sumExpAmountByUserId(testUserId)).thenReturn(10.0);
         when(levelService.calculateLevel(anyDouble())).thenReturn(1);
 
         // When
         gamificationService.processUserLogin(testUserId);
 
         // Then
-        verify(expTransactionMapper).insert(any(ExpTransaction.class));
-        verify(yuanTransactionMapper).insert(any(YuanTransaction.class));
-        verify(dailyRewardLogMapper).update(any(DailyRewardLog.class));
-        verify(dailyRewardLogMapper, never()).insert(any());
+        verify(userProgressRepository).saveExpTransaction(any(ExpTransaction.class));
+        verify(userProgressRepository).saveYuanTransaction(any(YuanTransaction.class));
+        verify(userProgressRepository).updateDailyRewardLog(any(DailyRewardLog.class));
+        verify(userProgressRepository, never()).saveDailyRewardLog(any());
     }
 
     @Test
@@ -124,22 +117,22 @@ public class GamificationServiceTest {
         DailyRewardLog existingLog = new DailyRewardLog();
         existingLog.setUserId(testUserId);
         existingLog.setLastRewardDate(LocalDate.now());
-        when(dailyRewardLogMapper.findByUserId(testUserId)).thenReturn(Optional.of(existingLog));
+        when(userProgressRepository.findDailyRewardLogByUserId(testUserId)).thenReturn(Optional.of(existingLog));
 
         // When
         gamificationService.processUserLogin(testUserId);
 
         // Then
-        verify(expTransactionMapper, never()).insert(any());
-        verify(yuanTransactionMapper, never()).insert(any());
+        verify(userProgressRepository, never()).saveExpTransaction(any());
+        verify(userProgressRepository, never()).saveYuanTransaction(any());
         verify(achievementService).checkAndUnlockLoginAchievements(testUserId);
     }
 
     @Test
     void processUserLogin_LevelUp_EventPublished() {
         // Given
-        when(dailyRewardLogMapper.findByUserId(testUserId)).thenReturn(Optional.empty());
-        when(expTransactionMapper.sumAmountByUserId(testUserId)).thenReturn(98.0, 103.0); // Before and after
+        when(userProgressRepository.findDailyRewardLogByUserId(testUserId)).thenReturn(Optional.empty());
+        when(userProgressRepository.sumExpAmountByUserId(testUserId)).thenReturn(98.0, 103.0); // Before and after
         when(levelService.calculateLevel(98.0)).thenReturn(1);
         when(levelService.calculateLevel(103.0)).thenReturn(2);
 
@@ -153,14 +146,14 @@ public class GamificationServiceTest {
     @Test
     void processUserComment_Success() {
         // Given
-        when(expTransactionMapper.sumAmountByUserId(testUserId)).thenReturn(10.0, 15.0);
+        when(userProgressRepository.sumExpAmountByUserId(testUserId)).thenReturn(10.0, 15.0);
         when(levelService.calculateLevel(anyDouble())).thenReturn(1);
 
         // When
         gamificationService.processUserComment(testUserId, 1L);
 
         // Then
-        verify(expTransactionMapper).insert(any(ExpTransaction.class));
+        verify(userProgressRepository).saveExpTransaction(any(ExpTransaction.class));
         verify(achievementService).checkAndUnlockCommentAchievements(testUserId, 1L);
         verify(kafkaTemplate, never()).send(any(), any());
     }
@@ -168,36 +161,36 @@ public class GamificationServiceTest {
     @Test
     void processUserReview_Success() {
         // Given
-        when(expTransactionMapper.sumAmountByUserId(testUserId)).thenReturn(10.0, 15.0);
+        when(userProgressRepository.sumExpAmountByUserId(testUserId)).thenReturn(10.0, 15.0);
         when(levelService.calculateLevel(anyDouble())).thenReturn(1);
 
         // When
         gamificationService.processUserReview(testUserId, 1L);
 
         // Then
-        verify(expTransactionMapper).insert(any(ExpTransaction.class));
+        verify(userProgressRepository).saveExpTransaction(any(ExpTransaction.class));
         verify(achievementService).checkAndUnlockReviewAchievements(testUserId, 1L);
     }
 
     @Test
     void processUserVote_Success() {
         // Given
-        when(expTransactionMapper.sumAmountByUserId(testUserId)).thenReturn(10.0, 13.0);
+        when(userProgressRepository.sumExpAmountByUserId(testUserId)).thenReturn(10.0, 13.0);
         when(levelService.calculateLevel(anyDouble())).thenReturn(1);
 
         // When
         gamificationService.processUserVote(testUserId);
 
         // Then
-        verify(expTransactionMapper).insert(any(ExpTransaction.class));
-        verify(yuanTransactionMapper).insert(any(YuanTransaction.class));
+        verify(userProgressRepository).saveExpTransaction(any(ExpTransaction.class));
+        verify(userProgressRepository).saveYuanTransaction(any(YuanTransaction.class));
     }
 
     @Test
     void getGamificationStatsForUser_WithData() {
         // Given
-        when(expTransactionMapper.sumAmountByUserId(testUserId)).thenReturn(150.0);
-        when(yuanTransactionMapper.sumAmountByUserId(testUserId)).thenReturn(25.5);
+        when(userProgressRepository.sumExpAmountByUserId(testUserId)).thenReturn(150.0);
+        when(userProgressRepository.sumYuanAmountByUserId(testUserId)).thenReturn(25.5);
         when(levelService.calculateLevel(150.0)).thenReturn(2);
         when(levelService.getExpForNextLevel(2)).thenReturn(500.0);
 
@@ -213,8 +206,8 @@ public class GamificationServiceTest {
     @Test
     void getGamificationStatsForUser_NoData() {
         // Given
-        when(expTransactionMapper.sumAmountByUserId(testUserId)).thenReturn(null);
-        when(yuanTransactionMapper.sumAmountByUserId(testUserId)).thenReturn(null);
+        when(userProgressRepository.sumExpAmountByUserId(testUserId)).thenReturn(null);
+        when(userProgressRepository.sumYuanAmountByUserId(testUserId)).thenReturn(null);
         when(levelService.calculateLevel(0.0)).thenReturn(1);
         when(levelService.getExpForNextLevel(1)).thenReturn(100.0);
 
@@ -234,7 +227,7 @@ public class GamificationServiceTest {
         transaction.setAmount(10.0);
         transaction.setDescription("Test");
         transaction.setCreatedAt(OffsetDateTime.now());
-        when(yuanTransactionMapper.findByUserIdPaged(testUserId, 0, 10)).thenReturn(Collections.singletonList(transaction));
+        when(userProgressRepository.findYuanTransactionsByUserIdPaged(testUserId, 0, 10)).thenReturn(Collections.singletonList(transaction));
 
         // When
         var history = gamificationService.getTransactionHistory(testUserId, 0, 10);
@@ -247,22 +240,22 @@ public class GamificationServiceTest {
     @Test
     void getUnlockedAchievements_Success() {
         // Given
-        when(userAchievementMapper.findUnlockedAchievementsByUserId(testUserId)).thenReturn(Collections.singletonList(new AchievementDTO()));
+        when(userProgressRepository.findUnlockedAchievementsByUserId(testUserId)).thenReturn(Collections.singletonList(new AchievementDTO()));
 
         // When
         List<AchievementDTO> achievements = gamificationService.getUnlockedAchievements(testUserId);
 
         // Then
         assertEquals(1, achievements.size());
-        verify(userAchievementMapper).findUnlockedAchievementsByUserId(testUserId);
+        verify(userProgressRepository).findUnlockedAchievementsByUserId(testUserId);
     }
 
     @Test
     void findYuanTransactionsForAdmin_Success() {
         // Given
         OffsetDateTime now = OffsetDateTime.now();
-        when(yuanTransactionMapper.findWithFilters(testUserId, now, now, 0, 10)).thenReturn(Collections.singletonList(new YuanTransaction()));
-        when(yuanTransactionMapper.countWithFilters(testUserId, now, now)).thenReturn(1L);
+        when(userProgressRepository.findYuanTransactionsWithFilters(testUserId, now, now, 0, 10)).thenReturn(Collections.singletonList(new YuanTransaction()));
+        when(userProgressRepository.countYuanTransactionsWithFilters(testUserId, now, now)).thenReturn(1L);
 
         // When
         PageResponseDTO<AdminYuanTransactionDTO> result = gamificationService.findYuanTransactionsForAdmin(testUserId, now, now, 0, 10);
@@ -275,46 +268,46 @@ public class GamificationServiceTest {
     @Test
     void rewardComment_Success() {
         // Given
-        when(expTransactionMapper.sumAmountByUserId(testUserId)).thenReturn(10.0, 15.0);
+        when(userProgressRepository.sumExpAmountByUserId(testUserId)).thenReturn(10.0, 15.0);
         when(levelService.calculateLevel(anyDouble())).thenReturn(1);
 
         // When
         gamificationService.rewardComment(testUserId, 1L);
 
         // Then
-        verify(expTransactionMapper).insert(any(ExpTransaction.class));
+        verify(userProgressRepository).saveExpTransaction(any(ExpTransaction.class));
     }
 
     @Test
     void rewardReview_Success() {
         // Given
-        when(expTransactionMapper.sumAmountByUserId(testUserId)).thenReturn(10.0, 15.0);
+        when(userProgressRepository.sumExpAmountByUserId(testUserId)).thenReturn(10.0, 15.0);
         when(levelService.calculateLevel(anyDouble())).thenReturn(1);
 
         // When
         gamificationService.rewardReview(testUserId, 1L);
 
         // Then
-        verify(expTransactionMapper).insert(any(ExpTransaction.class));
+        verify(userProgressRepository).saveExpTransaction(any(ExpTransaction.class));
     }
 
     @Test
     void rewardVote_Success() {
         // Given
-        when(expTransactionMapper.sumAmountByUserId(testUserId)).thenReturn(10.0, 13.0);
+        when(userProgressRepository.sumExpAmountByUserId(testUserId)).thenReturn(10.0, 13.0);
         when(levelService.calculateLevel(anyDouble())).thenReturn(1);
 
         // When
         gamificationService.rewardVote(testUserId);
 
         // Then
-        verify(expTransactionMapper).insert(any(ExpTransaction.class));
+        verify(userProgressRepository).saveExpTransaction(any(ExpTransaction.class));
     }
 
     @Test
     void checkVoteEligibility_CanVote() {
         // Given
-        when(yuanTransactionMapper.sumAmountByUserId(testUserId)).thenReturn(10.0);
+        when(userProgressRepository.sumYuanAmountByUserId(testUserId)).thenReturn(10.0);
 
         // When
         VoteCheckResponseDTO response = gamificationService.checkVoteEligibility(testUserId);
@@ -327,7 +320,7 @@ public class GamificationServiceTest {
     @Test
     void checkVoteEligibility_CannotVote() {
         // Given
-        when(yuanTransactionMapper.sumAmountByUserId(testUserId)).thenReturn(0.5);
+        when(userProgressRepository.sumYuanAmountByUserId(testUserId)).thenReturn(0.5);
 
         // When
         VoteCheckResponseDTO response = gamificationService.checkVoteEligibility(testUserId);
@@ -339,7 +332,7 @@ public class GamificationServiceTest {
     @Test
     void checkVoteEligibility_NullBalance() {
         // Given
-        when(yuanTransactionMapper.sumAmountByUserId(testUserId)).thenReturn(null);
+        when(userProgressRepository.sumYuanAmountByUserId(testUserId)).thenReturn(null);
 
         // When
         VoteCheckResponseDTO response = gamificationService.checkVoteEligibility(testUserId);
@@ -356,7 +349,7 @@ public class GamificationServiceTest {
 
         // Then
         ArgumentCaptor<YuanTransaction> captor = ArgumentCaptor.forClass(YuanTransaction.class);
-        verify(yuanTransactionMapper).insert(captor.capture());
+        verify(userProgressRepository).saveYuanTransaction(captor.capture());
         assertEquals(-1.0, captor.getValue().getAmount());
         assertEquals("Vote cost", captor.getValue().getDescription());
     }
@@ -368,7 +361,7 @@ public class GamificationServiceTest {
 
         // Then
         ArgumentCaptor<YuanTransaction> captor = ArgumentCaptor.forClass(YuanTransaction.class);
-        verify(yuanTransactionMapper).insert(captor.capture());
+        verify(userProgressRepository).saveYuanTransaction(captor.capture());
         assertEquals(100.0, captor.getValue().getAmount());
         assertEquals("Test reason", captor.getValue().getDescription());
     }
@@ -379,7 +372,7 @@ public class GamificationServiceTest {
         assertThrows(ValidationException.class, () -> {
             gamificationService.adminAddYuan(testUserId, 0.0, "Invalid");
         });
-        verify(yuanTransactionMapper, never()).insert(any());
+        verify(userProgressRepository, never()).saveYuanTransaction(any());
     }
 
     @Test
@@ -401,7 +394,7 @@ public class GamificationServiceTest {
         user1Yuan.put("totalAmount", 20.0);
         // User2 has no yuan transaction for testing purposes
 
-        when(expTransactionMapper.sumAmountGroupedByUser()).thenReturn(Arrays.asList(user1Exp, user2Exp));
+        when(userProgressRepository.sumExpAmountGroupedByUser()).thenReturn(Arrays.asList(user1Exp, user2Exp));
 
         when(levelService.calculateLevel(150.0)).thenReturn(2);
         when(levelService.getExpForNextLevel(2)).thenReturn(500.0);
@@ -426,7 +419,7 @@ public class GamificationServiceTest {
                         dto.getTotalExpForNextLevel() == 2000.0
         ));
 
-        verify(expTransactionMapper).sumAmountGroupedByUser();
+        verify(userProgressRepository).sumExpAmountGroupedByUser();
     }
 
     @Test
@@ -445,7 +438,7 @@ public class GamificationServiceTest {
         user1Yuan.put("totalAmount", 20.0);
 
         // Mocking so that user2 has exp but no yuan
-        when(expTransactionMapper.sumAmountGroupedByUsers(userIds)).thenReturn(Collections.singletonList(user1Exp));
+        when(userProgressRepository.sumExpAmountGroupedByUsers(userIds)).thenReturn(Collections.singletonList(user1Exp));
 
         when(levelService.calculateLevel(150.0)).thenReturn(2);
         when(levelService.getExpForNextLevel(2)).thenReturn(500.0);
@@ -470,7 +463,7 @@ public class GamificationServiceTest {
                         dto.getTotalExpForNextLevel() == 100.0
         ));
 
-        verify(expTransactionMapper).sumAmountGroupedByUsers(userIds);
+        verify(userProgressRepository).sumExpAmountGroupedByUsers(userIds);
     }
 
     @Test
@@ -483,7 +476,7 @@ public class GamificationServiceTest {
 
         // Then
         assertTrue(result.isEmpty());
-        verify(expTransactionMapper, never()).sumAmountGroupedByUsers(any());
+        verify(userProgressRepository, never()).sumExpAmountGroupedByUsers(any());
     }
 
 }
