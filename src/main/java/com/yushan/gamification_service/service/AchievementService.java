@@ -1,6 +1,6 @@
 package com.yushan.gamification_service.service;
 
-import com.yushan.gamification_service.dao.UserAchievementMapper;
+import com.yushan.gamification_service.repository.UserProgressRepository;
 import com.yushan.gamification_service.entity.UserAchievement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,7 +31,7 @@ public class AchievementService {
     private static final String ACHIEVEMENT_ID_LEVEL_5 = "ACCOMPLISHED_SCHOLAR";
 
     @Autowired
-    private UserAchievementMapper userAchievementMapper;
+    private UserProgressRepository userProgressRepository;
 
     @Transactional
     public void checkAndUnlockLoginAchievements(UUID userId) {
@@ -94,13 +94,13 @@ public class AchievementService {
     }
 
     private void unlockAchievementIfNotOwned(UUID userId, String achievementId) {
-        Long existingUnlock = userAchievementMapper.findByUserIdAndAchievementId(userId, achievementId);
+        Long existingUnlock = userProgressRepository.findUserAchievementByUserIdAndAchievementId(userId, achievementId);
         if (existingUnlock == null) {
             logger.info("Unlocking achievement '{}' for user '{}'", achievementId, userId);
             UserAchievement newUserAchievement = new UserAchievement();
             newUserAchievement.setUserId(userId);
             newUserAchievement.setAchievementId(achievementId);
-            userAchievementMapper.insert(newUserAchievement);
+            userProgressRepository.saveUserAchievement(newUserAchievement);
         } else {
             logger.debug("User {} already owns achievement '{}'", userId, achievementId);
         }

@@ -1,6 +1,7 @@
 package com.yushan.gamification_service.service;
 
-import com.yushan.gamification_service.dao.UserAchievementMapper;
+import com.yushan.gamification_service.repository.UserProgressRepository;
+import org.springframework.test.util.ReflectionTestUtils;
 import com.yushan.gamification_service.entity.UserAchievement;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,7 +22,7 @@ import static org.mockito.Mockito.*;
 public class AchievementServiceTest {
 
     @Mock(lenient = true)
-    private UserAchievementMapper userAchievementMapper;
+    private UserProgressRepository userProgressRepository;
 
     @InjectMocks
     private AchievementService achievementService;
@@ -31,32 +32,34 @@ public class AchievementServiceTest {
     @BeforeEach
     void setUp() {
         testUserId = UUID.randomUUID();
+        // Inject UserProgressRepository into AchievementService
+        ReflectionTestUtils.setField(achievementService, "userProgressRepository", userProgressRepository);
     }
 
     @Test
     void checkAndUnlockLoginAchievements_FirstLogin_UnlocksAchievement() {
         // Given
-        when(userAchievementMapper.findByUserIdAndAchievementId(eq(testUserId), eq("WELCOME_TO_YUSHAN")))
+        when(userProgressRepository.findUserAchievementByUserIdAndAchievementId(eq(testUserId), eq("WELCOME_TO_YUSHAN")))
             .thenReturn(null);
 
         // When
         achievementService.checkAndUnlockLoginAchievements(testUserId);
 
         // Then
-        verify(userAchievementMapper).insert(any(UserAchievement.class));
+        verify(userProgressRepository).saveUserAchievement(any(UserAchievement.class));
     }
 
     @Test
     void checkAndUnlockLoginAchievements_AlreadyUnlocked_DoesNothing() {
         // Given
-        when(userAchievementMapper.findByUserIdAndAchievementId(eq(testUserId), eq("WELCOME_TO_YUSHAN")))
+        when(userProgressRepository.findUserAchievementByUserIdAndAchievementId(eq(testUserId), eq("WELCOME_TO_YUSHAN")))
             .thenReturn(1L);
 
         // When
         achievementService.checkAndUnlockLoginAchievements(testUserId);
 
         // Then
-        verify(userAchievementMapper, never()).insert(any(UserAchievement.class));
+        verify(userProgressRepository, never()).saveUserAchievement(any(UserAchievement.class));
     }
 
     @ParameterizedTest
@@ -71,7 +74,7 @@ public class AchievementServiceTest {
     void checkAndUnlockCommentAchievements_UnlocksCorrectAchievements(
             long commentCount, String achievementId, boolean shouldUnlock) {
         // Given
-        when(userAchievementMapper.findByUserIdAndAchievementId(eq(testUserId), eq(achievementId)))
+        when(userProgressRepository.findUserAchievementByUserIdAndAchievementId(eq(testUserId), eq(achievementId)))
                 .thenReturn(shouldUnlock ? null : 1L);
 
         // When
@@ -79,10 +82,10 @@ public class AchievementServiceTest {
 
         // Then
         if (shouldUnlock) {
-            verify(userAchievementMapper).findByUserIdAndAchievementId(eq(testUserId), eq(achievementId));
-            verify(userAchievementMapper).insert(any(UserAchievement.class));
+            verify(userProgressRepository).findUserAchievementByUserIdAndAchievementId(eq(testUserId), eq(achievementId));
+            verify(userProgressRepository).saveUserAchievement(any(UserAchievement.class));
         } else {
-            verify(userAchievementMapper, never()).insert(any(UserAchievement.class));
+            verify(userProgressRepository, never()).saveUserAchievement(any(UserAchievement.class));
         }
     }
 
@@ -98,7 +101,7 @@ public class AchievementServiceTest {
     void checkAndUnlockReviewAchievements_UnlocksCorrectAchievements(
             long reviewCount, String achievementId, boolean shouldUnlock) {
         // Given
-        when(userAchievementMapper.findByUserIdAndAchievementId(eq(testUserId), eq(achievementId)))
+        when(userProgressRepository.findUserAchievementByUserIdAndAchievementId(eq(testUserId), eq(achievementId)))
             .thenReturn(shouldUnlock ? null : 1L);
 
         // When
@@ -106,10 +109,10 @@ public class AchievementServiceTest {
 
         // Then
         if (shouldUnlock) {
-            verify(userAchievementMapper).findByUserIdAndAchievementId(eq(testUserId), eq(achievementId));
-            verify(userAchievementMapper).insert(any(UserAchievement.class));
+            verify(userProgressRepository).findUserAchievementByUserIdAndAchievementId(eq(testUserId), eq(achievementId));
+            verify(userProgressRepository).saveUserAchievement(any(UserAchievement.class));
         } else {
-            verify(userAchievementMapper, never()).insert(any(UserAchievement.class));
+            verify(userProgressRepository, never()).saveUserAchievement(any(UserAchievement.class));
         }
     }
 
@@ -123,7 +126,7 @@ public class AchievementServiceTest {
     void checkAndUnlockVoteAchievements_UnlocksCorrectAchievements(
             long voteCount, String achievementId, boolean shouldUnlock) {
         // Given
-        when(userAchievementMapper.findByUserIdAndAchievementId(eq(testUserId), eq(achievementId)))
+        when(userProgressRepository.findUserAchievementByUserIdAndAchievementId(eq(testUserId), eq(achievementId)))
             .thenReturn(shouldUnlock ? null : 1L);
 
         // When
@@ -131,10 +134,10 @@ public class AchievementServiceTest {
 
         // Then
         if (shouldUnlock) {
-            verify(userAchievementMapper).findByUserIdAndAchievementId(eq(testUserId), eq(achievementId));
-            verify(userAchievementMapper).insert(any(UserAchievement.class));
+            verify(userProgressRepository).findUserAchievementByUserIdAndAchievementId(eq(testUserId), eq(achievementId));
+            verify(userProgressRepository).saveUserAchievement(any(UserAchievement.class));
         } else {
-            verify(userAchievementMapper, never()).insert(any(UserAchievement.class));
+            verify(userProgressRepository, never()).saveUserAchievement(any(UserAchievement.class));
         }
     }
 
@@ -148,7 +151,7 @@ public class AchievementServiceTest {
     void checkAndUnlockLevelAchievements_UnlocksCorrectAchievements(
             int level, String achievementId, boolean shouldUnlock) {
         // Given
-        when(userAchievementMapper.findByUserIdAndAchievementId(eq(testUserId), eq(achievementId)))
+        when(userProgressRepository.findUserAchievementByUserIdAndAchievementId(eq(testUserId), eq(achievementId)))
             .thenReturn(shouldUnlock ? null : 1L);
 
         // When
@@ -156,10 +159,10 @@ public class AchievementServiceTest {
 
         // Then
         if (shouldUnlock) {
-            verify(userAchievementMapper).findByUserIdAndAchievementId(eq(testUserId), eq(achievementId));
-            verify(userAchievementMapper).insert(any(UserAchievement.class));
+            verify(userProgressRepository).findUserAchievementByUserIdAndAchievementId(eq(testUserId), eq(achievementId));
+            verify(userProgressRepository).saveUserAchievement(any(UserAchievement.class));
         } else {
-            verify(userAchievementMapper, never()).insert(any(UserAchievement.class));
+            verify(userProgressRepository, never()).saveUserAchievement(any(UserAchievement.class));
         }
     }
 }

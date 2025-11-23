@@ -1,9 +1,6 @@
 package com.yushan.gamification_service.service;
 
-import com.yushan.gamification_service.dao.DailyRewardLogMapper;
-import com.yushan.gamification_service.dao.ExpTransactionMapper;
-import com.yushan.gamification_service.dao.YuanTransactionMapper;
-import com.yushan.gamification_service.dao.UserAchievementMapper;
+import com.yushan.gamification_service.repository.UserProgressRepository;
 import com.yushan.gamification_service.dto.achievement.AchievementDTO;
 import com.yushan.gamification_service.dto.stats.GamificationStatsDTO;
 import com.yushan.gamification_service.dto.user.UserLevelDTO;
@@ -50,22 +47,13 @@ public class GamificationService {
     private double voteExp;
 
     @Autowired
-    private DailyRewardLogMapper dailyRewardLogMapper;
-    
-    @Autowired
-    private ExpTransactionMapper expTransactionMapper;
-    
-    @Autowired
-    private YuanTransactionMapper yuanTransactionMapper;
+    private UserProgressRepository userProgressRepository;
     
     @Autowired
     private LevelService levelService;
     
     @Autowired
     private AchievementService achievementService;
-    
-    @Autowired
-    private UserAchievementMapper userAchievementMapper;
 
     @Autowired
     private KafkaTemplate<String, Object> kafkaTemplate;
@@ -78,7 +66,7 @@ public class GamificationService {
         yuanTransaction.setUserId(userId);
         yuanTransaction.setAmount(registrationYuan);
         yuanTransaction.setDescription("Registration Reward");
-        yuanTransactionMapper.insert(yuanTransaction);
+        userProgressRepository.saveYuanTransaction(yuanTransaction);
         logger.debug("Inserted Yuan transaction for user: {} with amount: {}", userId, registrationYuan);
     }
 
@@ -87,7 +75,7 @@ public class GamificationService {
         logger.info("Processing login for user: {}", userId);
 
         LocalDate today = LocalDate.now();
-        Optional<DailyRewardLog> rewardLogOpt = dailyRewardLogMapper.findByUserId(userId);
+        Optional<DailyRewardLog> rewardLogOpt = userProgressRepository.findDailyRewardLogByUserId(userId);
 
         if (rewardLogOpt.isPresent() && rewardLogOpt.get().getLastRewardDate().isEqual(today)) {
             logger.info("User {} has already claimed the daily reward today.", userId);
@@ -98,7 +86,7 @@ public class GamificationService {
         logger.info("Awarding daily login reward to user: {}", userId);
         
         // Calculate current level to determine Yuan reward
-        Double currentTotalExp = expTransactionMapper.sumAmountByUserId(userId);
+        Double currentTotalExp = userProgressRepository.sumExpAmountByUserId(userId);
         double currentTotalExpValue = (currentTotalExp == null) ? 0.0 : currentTotalExp;
         int currentLevel = levelService.calculateLevel(currentTotalExpValue);
         
@@ -107,7 +95,7 @@ public class GamificationService {
         expTransaction.setUserId(userId);
         expTransaction.setAmount(dailyLoginExp);
         expTransaction.setReason("Daily Login Reward");
-        expTransactionMapper.insert(expTransaction);
+        userProgressRepository.saveExpTransaction(expTransaction);
         logger.debug("Inserted EXP transaction for user: {}", userId);
 
         // (Yuan) - Yuan = level (matching yushan-backend logic)
@@ -115,19 +103,19 @@ public class GamificationService {
         yuanTransaction.setUserId(userId);
         yuanTransaction.setAmount((double) currentLevel); // Yuan = level
         yuanTransaction.setDescription("Daily Login Reward");
-        yuanTransactionMapper.insert(yuanTransaction);
+        userProgressRepository.saveYuanTransaction(yuanTransaction);
         logger.debug("Inserted Yuan transaction for user: {} with amount: {}", userId, currentLevel);
 
         if (rewardLogOpt.isPresent()) {
             DailyRewardLog rewardLog = rewardLogOpt.get();
             rewardLog.setLastRewardDate(today);
-            dailyRewardLogMapper.update(rewardLog);
+            userProgressRepository.updateDailyRewardLog(rewardLog);
             logger.debug("Updated daily reward log for user: {}", userId);
         } else {
             DailyRewardLog newRewardLog = new DailyRewardLog();
             newRewardLog.setUserId(userId);
             newRewardLog.setLastRewardDate(today);
-            dailyRewardLogMapper.insert(newRewardLog);
+            userProgressRepository.saveDailyRewardLog(newRewardLog);
             logger.debug("Created new daily reward log for user: {}", userId);
         }
 
@@ -145,7 +133,7 @@ public class GamificationService {
         expTransaction.setUserId(userId);
         expTransaction.setAmount(commentExp);
         expTransaction.setReason("Posted a comment with ID: " + commentId);
-        expTransactionMapper.insert(expTransaction);
+        userProgressRepository.saveExpTransaction(expTransaction);
         logger.debug("Awarded {} EXP to user {} for comment {}", commentExp, userId, commentId);
 
         achievementService.checkAndUnlockCommentAchievements(userId, 1L);
@@ -161,7 +149,7 @@ public class GamificationService {
         expTransaction.setUserId(userId);
         expTransaction.setAmount(reviewExp);
         expTransaction.setReason("Posted a review with ID: " + reviewId);
-        expTransactionMapper.insert(expTransaction);
+        userProgressRepository.saveExpTransaction(expTransaction);
         logger.debug("Awarded {} EXP to user {} for review {}", reviewExp, userId, reviewId);
 
         achievementService.checkAndUnlockReviewAchievements(userId, 1L);
@@ -171,8 +159,8 @@ public class GamificationService {
 
 
     public GamificationStatsDTO getGamificationStatsForUser(UUID userId) {
-        Double totalExp = expTransactionMapper.sumAmountByUserId(userId);
-        Double yuanBalance = yuanTransactionMapper.sumAmountByUserId(userId);
+        Double totalExp = userProgressRepository.sumExpAmountByUserId(userId);
+        Double yuanBalance = userProgressRepository.sumYuanAmountByUserId(userId);
 
         double totalExpValue = (totalExp == null) ? 0.0 : totalExp;
         double yuanBalanceValue = (yuanBalance == null) ? 0.0 : yuanBalance;
@@ -187,7 +175,7 @@ public class GamificationService {
     public List<YuanTransactionDTO> getTransactionHistory(UUID userId, int page, int size) {
         int offset = page * size;
 
-        List<YuanTransaction> transactions = yuanTransactionMapper.findByUserIdPaged(userId, offset, size);
+        List<YuanTransaction> transactions = userProgressRepository.findYuanTransactionsByUserIdPaged(userId, offset, size);
 
         return transactions.stream()
                 .map(t -> {
@@ -201,7 +189,7 @@ public class GamificationService {
     }
 
     public List<AchievementDTO> getUnlockedAchievements(UUID userId) {
-        return userAchievementMapper.findUnlockedAchievementsByUserId(userId);
+        return userProgressRepository.findUnlockedAchievementsByUserId(userId);
     }
 
     @Transactional
@@ -213,14 +201,14 @@ public class GamificationService {
         expTransaction.setUserId(userId);
         expTransaction.setAmount(voteExp);
         expTransaction.setReason("Voted on a novel");
-        expTransactionMapper.insert(expTransaction);
+        userProgressRepository.saveExpTransaction(expTransaction);
 
         // Deduct Yuan
         YuanTransaction yuanTransaction = new YuanTransaction();
         yuanTransaction.setUserId(userId);
         yuanTransaction.setAmount(-1.0);
         yuanTransaction.setDescription("Voted on a novel");
-        yuanTransactionMapper.insert(yuanTransaction);
+        userProgressRepository.saveYuanTransaction(yuanTransaction);
 
         logger.info("Awarded {} EXP and deducted 1 Yuan from user {} for voting.", voteExp, userId);
         
@@ -228,7 +216,7 @@ public class GamificationService {
     }
 
     private void checkLevelUpAndPublishEvent(UUID userId, Double expGained) {
-        Double currentTotalExp = expTransactionMapper.sumAmountByUserId(userId);
+        Double currentTotalExp = userProgressRepository.sumExpAmountByUserId(userId);
         if (currentTotalExp == null) currentTotalExp = 0.0;
 
         int currentLevel = levelService.calculateLevel(currentTotalExp);
@@ -253,7 +241,7 @@ public class GamificationService {
     ) {
         int offset = page * size;
 
-        List<YuanTransaction> transactions = yuanTransactionMapper.findWithFilters(userId, startDate, endDate, offset, size);
+        List<YuanTransaction> transactions = userProgressRepository.findYuanTransactionsWithFilters(userId, startDate, endDate, offset, size);
 
         List<AdminYuanTransactionDTO> dtos = transactions.stream().map(transaction -> {
             AdminYuanTransactionDTO dto = new AdminYuanTransactionDTO();
@@ -265,13 +253,13 @@ public class GamificationService {
             return dto;
         }).collect(Collectors.toList());
 
-        long totalElements = yuanTransactionMapper.countWithFilters(userId, startDate, endDate);
+        long totalElements = userProgressRepository.countYuanTransactionsWithFilters(userId, startDate, endDate);
 
         return new PageResponseDTO<>(dtos, totalElements, page, size);
     }
 
     public UserLevelDTO getUserLevel(UUID userId) {
-        Double totalExp = expTransactionMapper.sumAmountByUserId(userId);
+        Double totalExp = userProgressRepository.sumExpAmountByUserId(userId);
         double totalExpValue = (totalExp == null) ? 0.0 : totalExp;
         
         int currentLevel = levelService.calculateLevel(totalExpValue);
@@ -304,7 +292,7 @@ public class GamificationService {
         expTransaction.setUserId(userId);
         expTransaction.setAmount(commentExp);
         expTransaction.setReason("Comment reward for comment ID: " + commentId);
-        expTransactionMapper.insert(expTransaction);
+        userProgressRepository.saveExpTransaction(expTransaction);
         
         logger.info("Awarded {} EXP to user {} for comment {}", commentExp, userId, commentId);
         
@@ -321,7 +309,7 @@ public class GamificationService {
         expTransaction.setUserId(userId);
         expTransaction.setAmount(reviewExp);
         expTransaction.setReason("Review reward for review ID: " + reviewId);
-        expTransactionMapper.insert(expTransaction);
+        userProgressRepository.saveExpTransaction(expTransaction);
         
         logger.info("Awarded {} EXP to user {} for review {}", reviewExp, userId, reviewId);
         
@@ -338,7 +326,7 @@ public class GamificationService {
         expTransaction.setUserId(userId);
         expTransaction.setAmount(voteExp);
         expTransaction.setReason("Vote reward");
-        expTransactionMapper.insert(expTransaction);
+        userProgressRepository.saveExpTransaction(expTransaction);
         
         logger.info("Awarded {} EXP to user {} for voting", voteExp, userId);
         
@@ -347,7 +335,7 @@ public class GamificationService {
 
 
     public VoteCheckResponseDTO checkVoteEligibility(UUID userId) {
-        Double yuanBalance = yuanTransactionMapper.sumAmountByUserId(userId);
+        Double yuanBalance = userProgressRepository.sumYuanAmountByUserId(userId);
         double currentYuanBalance = (yuanBalance == null) ? 0.0 : yuanBalance;
         double requiredYuan = 1.0;
         
@@ -368,7 +356,7 @@ public class GamificationService {
         yuanTransaction.setUserId(userId);
         yuanTransaction.setAmount(-1.0);
         yuanTransaction.setDescription("Vote cost");
-        yuanTransactionMapper.insert(yuanTransaction);
+        userProgressRepository.saveYuanTransaction(yuanTransaction);
         
         logger.info("Deducted 1 Yuan from user {} for voting", userId);
     }
@@ -391,13 +379,13 @@ public class GamificationService {
         yuanTransaction.setUserId(userId);
         yuanTransaction.setAmount(amount);
         yuanTransaction.setDescription(reason != null ? reason : "Admin adjustment");
-        yuanTransactionMapper.insert(yuanTransaction);
+        userProgressRepository.saveYuanTransaction(yuanTransaction);
         
         logger.info("Successfully added {} Yuan to user {} by admin", amount, userId);
     }
 
     public List<GamificationStatsDTO> getAllUsersGamificationStats() {
-        List<Map<String, Object>> allUsersExp = expTransactionMapper.sumAmountGroupedByUser();
+        List<Map<String, Object>> allUsersExp = userProgressRepository.sumExpAmountGroupedByUser();
 
         Map<UUID, Double> expMap = allUsersExp.stream()
                 .collect(Collectors.toMap(
@@ -420,7 +408,7 @@ public class GamificationService {
             return Collections.emptyList();
         }
 
-        List<Map<String, Object>> usersExp = expTransactionMapper.sumAmountGroupedByUsers(userIds);
+        List<Map<String, Object>> usersExp = userProgressRepository.sumExpAmountGroupedByUsers(userIds);
 
         Map<UUID, Double> expMap = usersExp.stream()
                 .collect(Collectors.toMap(
