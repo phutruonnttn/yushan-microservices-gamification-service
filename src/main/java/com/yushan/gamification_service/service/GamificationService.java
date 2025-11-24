@@ -58,6 +58,9 @@ public class GamificationService {
     @Autowired
     private KafkaTemplate<String, Object> kafkaTemplate;
 
+    @Autowired
+    private TransactionAwareKafkaPublisher transactionAwareKafkaPublisher;
+
     private static final String INTERNAL_EVENTS_TOPIC = "internal_gamification_events";
 
     @Transactional
@@ -226,9 +229,14 @@ public class GamificationService {
 
         if (currentLevel > previousLevel) {
             logger.info("User {} leveled up from {} to {}!", userId, previousLevel, currentLevel);
-            LevelUpEvent event = new LevelUpEvent(userId, currentLevel);
-            kafkaTemplate.send(INTERNAL_EVENTS_TOPIC, event);
-            logger.info("Published LevelUpEvent to topic '{}'", INTERNAL_EVENTS_TOPIC);
+            // Publish LevelUpEvent AFTER transaction commit
+            final UUID finalUserId = userId;
+            final int finalCurrentLevel = currentLevel;
+            transactionAwareKafkaPublisher.publishAfterCommit(() -> {
+                LevelUpEvent event = new LevelUpEvent(finalUserId, finalCurrentLevel);
+                kafkaTemplate.send(INTERNAL_EVENTS_TOPIC, event);
+                logger.info("Published LevelUpEvent to topic '{}'", INTERNAL_EVENTS_TOPIC);
+            });
         }
     }
 

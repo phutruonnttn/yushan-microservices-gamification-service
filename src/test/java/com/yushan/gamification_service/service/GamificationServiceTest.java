@@ -43,6 +43,9 @@ public class GamificationServiceTest {
     @Mock
     private KafkaTemplate<String, Object> kafkaTemplate;
 
+    @Mock
+    private TransactionAwareKafkaPublisher transactionAwareKafkaPublisher;
+
     @InjectMocks
     private GamificationService gamificationService;
 
@@ -140,7 +143,7 @@ public class GamificationServiceTest {
         gamificationService.processUserLogin(testUserId);
 
         // Then
-        verify(kafkaTemplate).send(eq("internal_gamification_events"), any(LevelUpEvent.class));
+        verify(transactionAwareKafkaPublisher).publishAfterCommit(any(Runnable.class));
     }
 
     @Test
