@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.lang.NonNull;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
@@ -62,8 +63,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     
                     // 4.5. Check if user is enabled (not suspended/banned)
                     if (!userDetails.isEnabled()) {
-                        // User is disabled, don't authenticate
-                        filterChain.doFilter(request, response);
+                        // User is disabled, reject request with 403 Forbidden
+                        logger.warn("JWT-validated request but user is disabled (status: " + status + ") for user: " + userId);
+                        response.setStatus(HttpStatus.FORBIDDEN.value());
+                        response.setContentType("application/json");
+                        response.getWriter().write("{\"error\":\"Forbidden\",\"message\":\"User account is disabled or suspended\",\"status\":403}");
                         return;
                     }
                     

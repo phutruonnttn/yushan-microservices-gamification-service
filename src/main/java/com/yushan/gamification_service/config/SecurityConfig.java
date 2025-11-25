@@ -1,6 +1,7 @@
 package com.yushan.gamification_service.config;
 
 import com.yushan.gamification_service.security.CustomMethodSecurityExpressionHandler;
+import com.yushan.gamification_service.security.GatewayAuthenticationFilter;
 import com.yushan.gamification_service.security.JwtAuthenticationEntryPoint;
 import com.yushan.gamification_service.security.JwtAuthenticationFilter;
 import com.yushan.gamification_service.security.UserActivityFilter;
@@ -28,6 +29,9 @@ public class SecurityConfig {
 
     @Autowired
     private JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+
+    @Autowired
+    private GatewayAuthenticationFilter gatewayAuthenticationFilter;
 
     @Autowired
     private JwtAuthenticationFilter jwtAuthenticationFilter;
@@ -90,6 +94,10 @@ public class SecurityConfig {
                 )
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable())
+                // Add Gateway filter first (for gateway-validated requests)
+                // Then add JWT filter (for backward compatibility with direct service calls or inter-service calls)
+                // JWT validation is primarily handled at Gateway level, but services can still validate JWT for backward compatibility
+                .addFilterBefore(gatewayAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(userActivityFilter, UsernamePasswordAuthenticationFilter.class);
 

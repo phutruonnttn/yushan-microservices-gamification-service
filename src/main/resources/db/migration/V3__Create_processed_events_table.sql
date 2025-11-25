@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS processed_events (
     event_type VARCHAR(100) NOT NULL,
     service_name VARCHAR(50) NOT NULL,
     processed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    event_data JSONB
+    event_data TEXT
 );
 
 -- Index for cleanup old records

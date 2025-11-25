@@ -30,3 +30,8 @@ management:
     tags:
       application: gamification-service
       environment: production
+
+# Gateway HMAC Configuration for request signature verification
+gateway:
+  hmac:
+    secret: ${GATEWAY_HMAC_SECRET:yushan-gateway-hmac-secret-key-for-request-signature-2024}
