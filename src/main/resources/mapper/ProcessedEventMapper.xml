@@ -30,7 +30,14 @@
             #{eventType,jdbcType=VARCHAR},
             #{serviceName,jdbcType=VARCHAR},
             #{processedAt,jdbcType=TIMESTAMP},
-            #{eventData,jdbcType=VARCHAR}
+            <choose>
+                <when test="eventData != null and eventData != ''">
+                    #{eventData,jdbcType=VARCHAR}
+                </when>
+                <otherwise>
+                    NULL
+                </otherwise>
+            </choose>
         )
         ON CONFLICT (idempotency_key) DO NOTHING
     </insert>

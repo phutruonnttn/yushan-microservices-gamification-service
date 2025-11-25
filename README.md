@@ -267,7 +267,44 @@ The Gamification Service communicates with:
 
 ---
 
-## Security Considerations
+## 🔐 Authentication & Security
+
+### Authentication Architecture
+
+**JWT Validation is Centralized at API Gateway Level**
+
+- **Primary Flow**: All requests must go through API Gateway which validates JWT tokens
+- **Gateway-Validated Requests**: Service trusts requests with `X-Gateway-Validated: true` header
+- **HMAC Signature Verification**: Service verifies HMAC-SHA256 signatures to prevent header forgery attacks
+- **Backward Compatibility**: Service can still validate JWT tokens directly for inter-service calls
+
+**Filter Chain**:
+1. `GatewayAuthenticationFilter` - Processes gateway-validated requests with HMAC signature verification (preferred)
+2. `JwtAuthenticationFilter` - Validates JWT tokens (backward compatibility)
+
+**Security Features**:
+- **HMAC Signature**: Gateway signs requests with HMAC-SHA256 using shared secret (`GATEWAY_HMAC_SECRET`)
+- **Timestamp Validation**: Prevents replay attacks (5-minute tolerance)
+- **Constant-Time Comparison**: Prevents timing attacks during signature verification
+- **User Status Check**: `GatewayAuthenticationFilter` checks `X-User-Status` header to ensure user is active (`isEnabled()`)
+- **Disabled User Rejection**: Disabled/suspended users are rejected with **403 Forbidden** response
+
+### HMAC Configuration
+
+Configure the shared secret for HMAC signature verification in `application.yml`:
+
+```yaml
+gateway:
+  hmac:
+    secret: ${GATEWAY_HMAC_SECRET:yushan-gateway-hmac-secret-key-for-request-signature-2024}
+```
+
+**Important**: The same secret must be configured in API Gateway and all microservices.
+
+**Environment Variable**:
+- `GATEWAY_HMAC_SECRET`: Shared secret for HMAC signature verification (must match Gateway)
+
+### Security Considerations
 - Validate all point additions to prevent cheating
 - Implement rate limiting on point-earning endpoints
 - Use cryptographic verification for achievement unlocks
