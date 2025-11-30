@@ -195,6 +195,11 @@ public class GamificationService {
         return userProgressRepository.findUnlockedAchievementsByUserId(userId);
     }
 
+    /**
+     * Process vote event - awards EXP and deducts Yuan (legacy method for non-SAGA flow)
+     * @deprecated Use awardExpForVote() for SAGA flow
+     */
+    @Deprecated
     @Transactional
     public void processUserVote(UUID userId) {
         logger.info("Processing vote event for user: {}", userId);
@@ -214,6 +219,25 @@ public class GamificationService {
         userProgressRepository.saveYuanTransaction(yuanTransaction);
 
         logger.info("Awarded {} EXP and deducted 1 Yuan from user {} for voting.", voteExp, userId);
+        
+        checkLevelUpAndPublishEvent(userId, voteExp);
+    }
+
+    /**
+     * Award EXP for voting (SAGA flow - Yuan already deducted separately)
+     */
+    @Transactional
+    public void awardExpForVote(UUID userId) {
+        logger.info("Awarding EXP for vote (SAGA flow) for user: {}", userId);
+
+        // Award EXP only
+        ExpTransaction expTransaction = new ExpTransaction();
+        expTransaction.setUserId(userId);
+        expTransaction.setAmount(voteExp);
+        expTransaction.setReason("Voted on a novel (SAGA)");
+        userProgressRepository.saveExpTransaction(expTransaction);
+
+        logger.info("Awarded {} EXP to user {} for voting (SAGA flow).", voteExp, userId);
         
         checkLevelUpAndPublishEvent(userId, voteExp);
     }
