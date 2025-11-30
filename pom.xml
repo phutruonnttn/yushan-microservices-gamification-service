@@ -43,7 +43,7 @@
         <mapstruct.version>1.6.3</mapstruct.version>
         <!-- MyBatis version -->
         <mybatis.version>3.0.5</mybatis.version>
-        <mybatis-generator.version>1.3.7</mybatis-generator.version>
+        <mybatis-generator.version>1.4.2</mybatis-generator.version>
         <!-- Swagger/OpenAPI version -->
         <springdoc.version>2.8.14</springdoc.version>
         <!-- Security dependency versions -->
