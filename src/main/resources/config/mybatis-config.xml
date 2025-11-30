@@ -10,5 +10,7 @@
     <typeHandlers>
         <!-- Register UUID type handler -->
         <typeHandler handler="com.yushan.gamification_service.config.UUIDTypeHandler"/>
+        <!-- Register ReservationStatus type handler -->
+        <typeHandler handler="com.yushan.gamification_service.config.ReservationStatusTypeHandler"/>
     </typeHandlers>
 </configuration>

@@ -136,7 +136,12 @@ Instances currently registered with Eureka:
 - **POST** `/api/v1/gamification/reviews/{reviewId}/reward` - Award EXP for creating a review
 - **POST** `/api/v1/gamification/votes/reward` - Award 3 EXP for voting
 - **GET** `/api/v1/gamification/votes/check` - Check if user has enough Yuan to vote
-- **POST** `/api/v1/gamification/votes/deduct-yuan` - Deduct 1 Yuan for voting
+- **POST** `/api/v1/gamification/votes/deduct-yuan` - Deduct 1 Yuan for voting (legacy endpoint)
+
+### SAGA Pattern - Vote Creation Flow
+- **Kafka Listener**: `vote-saga.start` - Reserves Yuan for vote creation
+- **Kafka Listener**: `vote-saga.vote-created` - Confirms Yuan deduction and awards EXP
+- **Kafka Listener**: `vote-saga.compensate-yuan` - Releases reserved Yuan (compensation)
 
 ### Admin Endpoints
 - **GET** `/api/v1/gamification/admin/yuan/transactions` - Get all Yuan transactions (with filters, ADMIN)
@@ -156,9 +161,10 @@ Instances currently registered with Eureka:
 
 ### 💰 Yuan (Virtual Currency)
 - Yuan balance tracking
-- Yuan deduction for voting (1 Yuan per vote)
+- Yuan deduction for voting (1 Yuan per vote) - **SAGA Pattern implemented**
 - Yuan transaction history
 - Admin can add Yuan to users
+- **Yuan Reservation System** - Temporary reservations during distributed transactions (SAGA pattern)
 
 ### 🏆 Achievement System
 - Achievement unlocking system
@@ -180,6 +186,7 @@ The Gamification Service uses the following key entities:
 - **Achievement** - Achievement definitions
 - **UserAchievement** - User-achievement mappings
 - **YuanTransaction** - Yuan transaction history
+- **YuanReservation** - Temporary Yuan reservations during SAGA transactions (status: RESERVED, CONFIRMED, RELEASED)
 
 ---
 
@@ -196,6 +203,7 @@ Once this basic setup is working:
 8. ✅ Set up scheduled jobs for leaderboard updates
 9. ✅ Add notification system for unlocked achievements
 10. ✅ Implement anti-cheat mechanisms
+11. ✅ Implement SAGA Pattern for Vote Creation Flow (Yuan Reservation System)
 
 ---
 
@@ -253,8 +261,37 @@ The Gamification Service listens to events from other services:
 - **Reading Events**: From Engagement Service (chapters read, time spent)
 - **Social Events**: From User Service (follows, reviews, comments)
 - **Content Events**: From Content Service (novel ratings)
+- **SAGA Events**: Vote Creation Flow events (`vote-saga.start`, `vote-saga.vote-created`, `vote-saga.compensate-yuan`)
 
 These events trigger automatic achievement unlocks and point awards.
+
+### SAGA Pattern - Vote Creation Flow
+
+The Gamification Service implements the **Choreography SAGA pattern** for Vote Creation Flow to ensure atomicity between vote creation (Engagement Service) and Yuan deduction (Gamification Service).
+
+**Yuan Reservation System**:
+- Temporary Yuan reservations stored in `yuan_reservation` table
+- Reservation statuses: `RESERVED`, `CONFIRMED`, `RELEASED`
+- Balance check at reserve time (fail fast pattern)
+- Automatic compensation (Yuan release) on SAGA failures
+- Scheduled cleanup job for expired reservations (every 5 minutes)
+
+**SAGA Flow**:
+1. Receive `VoteSagaStartEvent` → Reserve Yuan (status: RESERVED)
+2. Publish `VoteSagaYuanReservedEvent` → Engagement Service creates vote
+3. Receive `VoteSagaVoteCreatedEvent` → Confirm reservation (deduct Yuan, award EXP)
+4. On failures → Release reserved Yuan (compensation)
+
+**Key Components**:
+- `YuanReservationService`: Manages Yuan reservations (reserve, confirm, release)
+- `VoteSagaListener`: Handles SAGA events for vote creation flow
+- `YuanReservationCleanupScheduler`: Scheduled job for expired reservation cleanup
+
+**Benefits**:
+- ✅ Atomicity: Vote creation and Yuan deduction are atomic (both succeed or both fail)
+- ✅ Data Consistency: No votes without Yuan deduction, no Yuan deduction without votes
+- ✅ Automatic Compensation: Failed steps trigger automatic rollback
+- ✅ Fail Fast: Balance check before SAGA starts (returns 400 if insufficient balance)
 
 ---
 

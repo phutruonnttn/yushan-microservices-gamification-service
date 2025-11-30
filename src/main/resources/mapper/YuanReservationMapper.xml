@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.yushan.gamification_service.dao.YuanReservationMapper">
+
+    <insert id="insert" parameterType="com.yushan.gamification_service.entity.YuanReservation" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO yuan_reservation (
+            reservation_id,
+            user_id,
+            amount,
+            saga_id,
+            status,
+            expires_at,
+            created_at
+        )
+        VALUES (
+            #{reservationId},
+            #{userId},
+            #{amount},
+            #{sagaId},
+            #{statusAsString},
+            #{expiresAt},
+            NOW()
+        )
+    </insert>
+
+    <resultMap id="YuanReservationResultMap" type="com.yushan.gamification_service.entity.YuanReservation">
+        <id property="id" column="id"/>
+        <result property="reservationId" column="reservation_id"/>
+        <result property="userId" column="user_id"/>
+        <result property="amount" column="amount"/>
+        <result property="sagaId" column="saga_id"/>
+        <result property="statusFromString" column="status"/>
+        <result property="expiresAt" column="expires_at"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="confirmedAt" column="confirmed_at"/>
+        <result property="releasedAt" column="released_at"/>
+    </resultMap>
+
+    <select id="findByReservationId" resultMap="YuanReservationResultMap">
+        SELECT
+            id,
+            reservation_id,
+            user_id,
+            amount,
+            saga_id,
+            status,
+            expires_at,
+            created_at,
+            confirmed_at,
+            released_at
+        FROM
+            yuan_reservation
+        WHERE
+            reservation_id = #{reservationId}
+    </select>
+
+    <select id="findBySagaId" resultMap="YuanReservationResultMap">
+        SELECT
+            id,
+            reservation_id,
+            user_id,
+            amount,
+            saga_id,
+            status,
+            expires_at,
+            created_at,
+            confirmed_at,
+            released_at
+        FROM
+            yuan_reservation
+        WHERE
+            saga_id = #{sagaId}
+        ORDER BY
+            created_at DESC
+        LIMIT 1
+    </select>
+
+    <update id="confirmReservation">
+        UPDATE yuan_reservation
+        SET
+            status = 'CONFIRMED',
+            confirmed_at = #{confirmedAt}
+        WHERE
+            reservation_id = #{reservationId}
+            AND status = 'RESERVED'
+    </update>
+
+    <update id="releaseReservation">
+        UPDATE yuan_reservation
+        SET
+            status = 'RELEASED',
+            released_at = #{releasedAt}
+        WHERE
+            reservation_id = #{reservationId}
+            AND status IN ('RESERVED', 'CONFIRMED')
+    </update>
+
+    <select id="findExpiredReservations" resultMap="YuanReservationResultMap">
+        SELECT
+            id,
+            reservation_id,
+            user_id,
+            amount,
+            saga_id,
+            status,
+            expires_at,
+            created_at,
+            confirmed_at,
+            released_at
+        FROM
+            yuan_reservation
+        WHERE
+            status = 'RESERVED'
+            AND expires_at &lt; #{currentTime}
+        ORDER BY
+            expires_at ASC
+    </select>
+
+    <select id="countByUserIdAndStatus" resultType="int">
+        SELECT COUNT(id)
+        FROM yuan_reservation
+        WHERE
+            user_id = #{userId}
+            AND status = #{status}
+    </select>
+
+    <select id="sumReservedAmountByUserId" resultType="double">
+        SELECT COALESCE(SUM(amount), 0.0)
+        FROM yuan_reservation
+        WHERE
+            user_id = #{userId}
+            AND status = 'RESERVED'
+            AND expires_at > NOW()
+    </select>
+
+</mapper>
+
