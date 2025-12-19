@@ -54,7 +54,7 @@
         <commons-jxpath.version>1.3</commons-jxpath.version>
         <gson.version>2.11.0</gson.version>
         <!-- JWT version -->
-        <jjwt.version>0.12.6</jjwt.version>
+        <jjwt.version>0.13.0</jjwt.version>
         <!-- Logback version - fix CVE-2025-11226 -->
         <logback.version>1.5.19</logback.version>
         <!-- BouncyCastle version - fix CVE-2025-8916 -->
