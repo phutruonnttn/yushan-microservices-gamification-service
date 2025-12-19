@@ -38,7 +38,7 @@
         <!-- Security fixes -->
         <commons-fileupload.version>1.6.0</commons-fileupload.version>
         <kafka-clients.version>3.9.1</kafka-clients.version>
-        <commons-lang3.version>3.18.0</commons-lang3.version>
+        <commons-lang3.version>3.20.0</commons-lang3.version>
         <!-- MapStruct version -->
         <mapstruct.version>1.6.3</mapstruct.version>
         <!-- MyBatis version -->
